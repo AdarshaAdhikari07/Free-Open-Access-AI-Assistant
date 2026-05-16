@@ -56,10 +56,12 @@ if hf_token:
                     max_tokens=1000,
                     stream=True,
                 ):
-                    token = chunk.choices[0].delta.content
-                    if token:
-                        full_response += token
-                        response_placeholder.markdown(full_response + "▌")
+                    # FIX: Verify the chunk contains choices before reading index 0
+                    if chunk.choices:
+                        token = chunk.choices[0].delta.content
+                        if token:
+                            full_response += token
+                            response_placeholder.markdown(full_response + "▌")
                 
                 # Render final clean response
                 response_placeholder.markdown(full_response)
