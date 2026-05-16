@@ -1,60 +1,71 @@
 import streamlit as st
-from langchain_openai import ChatOpenAI
-from langchain_community.utilities import SerpAPIWrapper
-from langchain_classic.agents import initialize_agent, Tool, AgentType
+from huggingface_hub import InferenceClient
 
-# 1. Streamlit Page Configuration
-st.set_page_config(page_title="🤖 My First AI Agent", layout="centered")
-st.title("🤖 Web-Searching AI Research Agent")
-st.write("Ask me anything! If I don't know the answer, I'll browse the web to find out.")
+# 1. Page Configuration
+st.set_page_config(page_title="🤖 Free Public AI", layout="centered")
+st.title("🤖 Free Open-Access AI Assistant")
+st.write("Welcome! This AI is completely free to use for everyone—no account or subscription required.")
 
-# 2. Sidebar for API Keys
-with st.sidebar:
-    st.header("🔑 API Configuration")
-    openai_key = st.text_input("OpenAI API Key", type="password")
-    serp_key = st.text_input("SerpAPI Key", type="password")
-    st.markdown("[Get OpenAI Key](https://platform.openai.com/) | [Get SerpAPI Key](https://serpapi.com/)")
+# 2. Securely pull the token from Streamlit Secrets (We will set this up in Step 3!)
+# If not deployed yet, it falls back to checking a local text field for testing.
+hf_token = st.secrets.get("HF_TOKEN", None)
 
-# 3. Main Agent Logic
-if st.button("Initialize Agent") or "agent" in st.session_state:
-    if not openai_key or not serp_key:
-        st.warning("Please enter both API keys in the sidebar to proceed.")
-    else:
-        # Save keys to session state so they persist
-        if "agent" not in st.session_state:
-            # Initialize the search tool
-            search = SerpAPIWrapper(serpapi_api_key=serp_key)
+if not hf_token:
+    with st.sidebar:
+        st.subheader("⚙️ Local Development Setup")
+        hf_token = st.text_input("Enter Hugging Face Token to test locally:", type="password")
+        st.caption("Note: This sidebar will disappear once you add the token to Streamlit Secrets!")
+
+# 3. Initialize Chat History
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Hello! I am a free, open-source AI assistant. How can I help you today?"}
+    ]
+
+# Display older messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# 4. User Interaction Loop
+if hf_token:
+    if user_query := st.chat_input("Type your message here..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(user_query)
+        st.session_state.messages.append({"role": "user", "content": user_query})
+
+        # Display assistant streaming response
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
             
-            tools = [
-                Tool(
-                    name="Search",
-                    func=search.run,
-                    description="Useful for when you need to answer questions about current events or real-time data."
-                )
-            ]
-            
-            # Initialize the LLM (Brain)
-            llm = ChatOpenAI(temperature=0, model="gpt-4o-mini", openai_api_key=openai_key)
-            
-            # Initialize the Agent safely from the classic ecosystem
-            st.session_state.agent = initialize_agent(
-                tools, 
-                llm, 
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
-                verbose=True
-            )
-            st.success("Agent is ready for action!")
-
-# 4. User Interaction
-if "agent" in st.session_state:
-    user_query = st.text_input("What would you like me to research today?")
-    
-    if user_query:
-        with st.spinner("🧠 Agent is thinking and searching..."):
             try:
-                # Run the agent
-                response = st.session_state.agent.run(user_query)
-                st.markdown("### 📋 Result:")
-                st.write(response)
+                # Initialize free serverless client running a top-tier open-source model
+                client = InferenceClient(provider="hf-inference", api_key=hf_token)
+                
+                # Format messages correctly for the model
+                formatted_messages = [
+                    {"role": m["role"], "content": m["content"]} for m in st.session_state.messages
+                ]
+                
+                # Stream the text chunks live as they generate
+                for chunk in client.chat_completion(
+                    model="Qwen/Qwen2.5-72B-Instruct",
+                    messages=formatted_messages,
+                    max_tokens=1000,
+                    stream=True,
+                ):
+                    token = chunk.choices[0].delta.content
+                    if token:
+                        full_response += token
+                        response_placeholder.markdown(full_response + "▌")
+                
+                # Render final clean response
+                response_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
             except Exception as e:
                 st.error(f"An error occurred: {e}")
+else:
+    st.info("Please add a Hugging Face token to begin.")
