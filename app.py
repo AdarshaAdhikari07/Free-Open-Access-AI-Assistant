@@ -6,7 +6,7 @@ st.set_page_config(page_title="🤖 Free Public AI", layout="centered")
 st.title("🤖 Free Open-Access AI Assistant")
 st.write("Welcome! This AI is completely free to use for everyone—no account or subscription required.")
 
-# 2. Securely pull the token from Streamlit Secrets (We will set this up in Step 3!)
+# 2. Securely pull the token from Streamlit Secrets
 # If not deployed yet, it falls back to checking a local text field for testing.
 hf_token = st.secrets.get("HF_TOKEN", None)
 
@@ -41,8 +41,8 @@ if hf_token:
             full_response = ""
             
             try:
-                # Initialize free serverless client running a top-tier open-source model
-                client = InferenceClient(provider="hf-inference", api_key=hf_token)
+                # 'provider="auto"' dynamically matches the model with the fastest serverless partner infrastructure
+                client = InferenceClient(provider="auto", api_key=hf_token)
                 
                 # Format messages correctly for the model
                 formatted_messages = [
