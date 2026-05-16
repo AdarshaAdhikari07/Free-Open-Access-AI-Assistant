@@ -6,8 +6,15 @@ st.set_page_config(page_title="🤖 Free Public AI", layout="centered")
 st.title("🤖 Free Open-Access AI Assistant")
 st.write("Welcome! This AI is completely free to use for everyone—no account or subscription required.")
 
+# Add a Reset Button in the sidebar to easily clear old conversations
+with st.sidebar:
+    if st.button("🧹 Clear Chat History"):
+        st.session_state.messages = [
+            {"role": "assistant", "content": "Hello! I am a free, open-source AI assistant. How can I help you today?"}
+        ]
+        st.rerun()
+
 # 2. Securely pull the token from Streamlit Secrets
-# If not deployed yet, it falls back to checking a local text field for testing.
 hf_token = st.secrets.get("HF_TOKEN", None)
 
 if not hf_token:
@@ -41,13 +48,17 @@ if hf_token:
             full_response = ""
             
             try:
-                # Direct initialization bypasses auto-router conflicts seamlessly
                 client = InferenceClient(api_key=hf_token)
                 
-                # Format messages correctly for the model
+                # FIX: Explicitly append a system instruction at the start of the API call 
+                # so the model knows its true identity and modern knowledge capabilities.
                 formatted_messages = [
-                    {"role": m["role"], "content": m["content"]} for m in st.session_state.messages
+                    {"role": "system", "content": "You are a helpful AI assistant powered by Llama 3.3. Your knowledge is current up to the recent frontier. Answer accurately without outdated legacy disclaimers."}
                 ]
+                
+                # Append the rest of the actual chat history
+                for m in st.session_state.messages:
+                    formatted_messages.append({"role": m["role"], "content": m["content"]})
                 
                 # Stream the text chunks live as they generate using Llama-3.3-70B
                 for chunk in client.chat_completion(
@@ -56,7 +67,6 @@ if hf_token:
                     max_tokens=1000,
                     stream=True,
                 ):
-                    # Verify the chunk contains choices before reading index 0
                     if chunk.choices:
                         token = chunk.choices[0].delta.content
                         if token:
